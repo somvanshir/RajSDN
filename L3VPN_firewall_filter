@@ -1,0 +1,66 @@
+Documentation -  - Verify L3VPN L3 firewall interface filter
+
+Resource  ${RDN_RESOURCE_PATH}/RDN.robot
+
+#Suite Teardown  Teardown Actions
+
+*** Variables ***
+
+${RDN_TEMPLATE_PATH}=  /usr/share/rdntestdev/templates/
+${RDN_RESOURCE_PATH}=  /usr/share/rdntestdev/resources/
+
+
+${serverIpPort}=  11017
+
+*** Test Cases ***
+
+HAJIME-L3VPN-001-16
+    [Documentation]  Test AAPR L3VPN L3 firewall interface filter
+    # Build topology information.
+    ${resv_params}=  Create Dictionary  res_name=IPV4_l3VPN_firewall1_filter  duration=1800
+    ${filter}=  Create List
+    Append To List  ${filter}  device0=hostname:S3CW-E-401;device0:interface0=interface:ae100,resv:ignore
+    Append To List  ${filter}  device1=hostname:wipm-e-001;device1:interface0=interface:xe-2/1/1,resv:ignore
+    Append To List  ${filter}  ixia0=hostname:ixia14
+    Append To List  ${filter}  ixia0:interface0=interface:7/8
+    # Update the topology object with required information.
+    Set Topology Key Value  device0.interfaces.interface0.tags.siteid  1
+    Set Topology Key Value  device1.interfaces.interface0.tags.siteid  2
+    Set Topology Key Value  device0.interfaces.interface0.description  "RESV | TE AUTOMATION | PE-CE | To ixia14 7/8"
+    Set Topology Key Value  device1.interfaces.interface0.description  "RESV | TE AUTOMATION | PE-CE | To ixia2 4/8"
+
+
+    #Set variables from topology object.
+     ${device0}=  Set Variable  ${devices.device0}
+     ${device1}=  Set Variable  ${devices.device1}
+     ${ixia0}=  Set Variable  ${devices.ixia0}
+
+
+    #Connect to devices and deploy service configurations.
+     Connect All Devices  ${devices}
+     Load All Configurations  ${RDN_TEMPLATE_PATH}  bgpv4_service  vpntype=l3vpn  to_file=false  also_console=False
+
+     Connect To Ixia Chassis And Ports  ixia0  serverIpPort=${serverIpPort}
+     Configure BGPv4 Peers  asType=2byte
+     Configure Routes
+     Start All Protocols
+     Sleep  45
+
+    #INSERT NEW KEYWORD: Check L3VPN firewall filter
+
+    Wait until BGP Neighbor is Established in all Routing Instances  device0  ${devices}
+    Check BGP Summary Total Prefix Count in all Routing Instances  device0  ${devices}  threshhold=1
+
+
+
+
+    Create Ip Traffic Stream With Fixed Duration  srcdevice=device0  destdevice=device1  endpoints=interfaces  duration=5  framesize=256  framerate=10000
+
+
+    Create Ip Traffic Stream With Fixed Duration  srcdevice=device1  destdevice=device0  endpoints=interfaces  duration=5  framesize=256  framerate=10000
+
+
+    Start Traffic
+    Get Shakeout Traffic Stats And Verify Impact
+
+    # End of Test Case.
